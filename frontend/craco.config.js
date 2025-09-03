@@ -3,13 +3,22 @@ const path = require('path');
 module.exports = {
   webpack: {
     configure: (webpackConfig) => {
-      // Remove ALL problematic plugins that use schema-utils
+      // Completely replace plugins array to avoid schema-utils issues
       webpackConfig.plugins = webpackConfig.plugins.filter(plugin => {
         const pluginName = plugin.constructor.name;
-        return !pluginName.includes('ForkTsCheckerWebpackPlugin') &&
-               !pluginName.includes('TerserPlugin') &&
-               !pluginName.includes('OptimizeCssAssetsPlugin');
+        // Only keep essential plugins that don't use schema-utils
+        return pluginName.includes('HtmlWebpackPlugin') ||
+               pluginName.includes('DefinePlugin') ||
+               pluginName.includes('HotModuleReplacementPlugin') ||
+               pluginName.includes('MiniCssExtractPlugin') ||
+               pluginName.includes('ProvidePlugin');
       });
+      
+      // Disable all optimization that might use schema-utils
+      webpackConfig.optimization = {
+        minimize: false,
+        splitChunks: false
+      };
       
       // Disable TypeScript checking completely
       webpackConfig.resolve.extensions = ['.js', '.jsx', '.json'];
@@ -17,15 +26,15 @@ module.exports = {
       // Add fallbacks for Node.js modules
       webpackConfig.resolve.fallback = {
         ...webpackConfig.resolve.fallback,
-        "path": require.resolve("path-browserify"),
-        "os": require.resolve("os-browserify/browser"),
-        "crypto": require.resolve("crypto-browserify"),
-        "stream": require.resolve("stream-browserify"),
-        "buffer": require.resolve("buffer"),
-        "util": require.resolve("util"),
         "fs": false,
         "net": false,
-        "tls": false
+        "tls": false,
+        "path": false,
+        "os": false,
+        "crypto": false,
+        "stream": false,
+        "buffer": false,
+        "util": false
       };
 
       return webpackConfig;
