@@ -58,7 +58,7 @@
     "start": "craco start",
     "build": "craco build",
     "test": "craco test",
-    "vercel-build": "GENERATE_SOURCEMAP=false react-scripts build"
+    "vercel-build": "CI=false react-scripts build"
   },
   "browserslist": {
     "production": [
@@ -87,12 +87,10 @@
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
   "resolutions": {
     "ajv": "^6.12.6",
-    "ajv-keywords": "^3.5.2",
-    "schema-utils": "^2.8.0"
+    "ajv-keywords": "^3.5.2"
   },
   "overrides": {
     "ajv": "^6.12.6",
-    "ajv-keywords": "^3.5.2",
-    "schema-utils": "^2.8.0"
+    "ajv-keywords": "^3.5.2"
   }
 }
