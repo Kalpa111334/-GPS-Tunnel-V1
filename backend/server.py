@@ -292,7 +292,7 @@ class RouteRequest(BaseModel):
     origin_lng: float = Field(..., ge=-180, le=180)
     destination_lat: float = Field(..., ge=-90, le=90)
     destination_lng: float = Field(..., ge=-180, le=180)
-    travel_mode: str = Field("driving", regex="^(driving|walking|bicycling|transit)$")
+    travel_mode: str = Field("driving", pattern="^(driving|walking|bicycling|transit)$")
     language: str = Field("en")
     avoid: Optional[List[str]] = Field(None)
 
