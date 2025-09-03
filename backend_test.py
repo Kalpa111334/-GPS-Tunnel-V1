@@ -230,12 +230,290 @@ class GPSTunnelAPITester:
         
         return True
 
-    def test_invalid_endpoints(self):
-        """Test invalid endpoints for proper error handling"""
-        print(f"\n🔍 Testing Invalid Endpoints...")
+    def test_search_places(self):
+        """Test destination search using Google Places API"""
+        # Test basic search
+        search_data = {
+            "query": "restaurants Amsterdam",
+            "language": "en"
+        }
         
-        # Test invalid route ID
         success, response = self.run_test(
+            "Search Places - Basic Query",
+            "POST",
+            "search/places",
+            200,
+            data=search_data
+        )
+        
+        if success and response:
+            if 'results' in response and 'status' in response:
+                results = response['results']
+                print(f"   Found {len(results)} places")
+                
+                if len(results) > 0:
+                    first_result = results[0]
+                    required_fields = ['place_id', 'name', 'formatted_address', 'latitude', 'longitude']
+                    missing_fields = [field for field in required_fields if field not in first_result]
+                    if missing_fields:
+                        print(f"   ⚠️  Missing fields in search result: {missing_fields}")
+                    else:
+                        print(f"   ✅ Search result structure is correct")
+                        print(f"   Sample result: {first_result['name']} - {first_result['formatted_address']}")
+                
+                # Test with location bias
+                search_with_location = {
+                    "query": "hotels near Dam Square",
+                    "latitude": 52.3738,
+                    "longitude": 4.8909,
+                    "radius": 5000,
+                    "language": "en"
+                }
+                
+                success2, response2 = self.run_test(
+                    "Search Places - With Location Bias",
+                    "POST",
+                    "search/places",
+                    200,
+                    data=search_with_location
+                )
+                
+                return success and success2
+            else:
+                print(f"   ❌ Expected 'results' and 'status' in response, got: {list(response.keys())}")
+                return False
+        return success
+
+    def test_calculate_route(self):
+        """Test route calculation using Google Directions API"""
+        # Test route from Amsterdam Central to Dam Square
+        route_data = {
+            "origin_lat": 52.3791,
+            "origin_lng": 4.9003,
+            "destination_lat": 52.3738,
+            "destination_lng": 4.8909,
+            "travel_mode": "driving",
+            "language": "en"
+        }
+        
+        success, response = self.run_test(
+            "Calculate Route - Basic",
+            "POST",
+            "directions/calculate",
+            200,
+            data=route_data
+        )
+        
+        if success and response:
+            required_fields = ['total_distance_text', 'total_duration_text', 'start_address', 
+                             'end_address', 'overview_polyline', 'steps', 'bounds']
+            missing_fields = [field for field in required_fields if field not in response]
+            if missing_fields:
+                print(f"   ⚠️  Missing fields in route response: {missing_fields}")
+                return False
+            
+            steps = response.get('steps', [])
+            print(f"   Route calculated with {len(steps)} steps")
+            print(f"   Total distance: {response['total_distance_text']}")
+            print(f"   Total duration: {response['total_duration_text']}")
+            
+            if len(steps) > 0:
+                first_step = steps[0]
+                step_fields = ['instruction', 'distance_text', 'duration_text', 
+                             'start_lat', 'start_lng', 'end_lat', 'end_lng']
+                missing_step_fields = [field for field in step_fields if field not in first_step]
+                if missing_step_fields:
+                    print(f"   ⚠️  Missing fields in route step: {missing_step_fields}")
+                else:
+                    print(f"   ✅ Route step structure is correct")
+                    print(f"   First instruction: {first_step['instruction'][:50]}...")
+            
+            # Test different travel modes
+            walking_route = route_data.copy()
+            walking_route['travel_mode'] = 'walking'
+            
+            success2, response2 = self.run_test(
+                "Calculate Route - Walking Mode",
+                "POST",
+                "directions/calculate",
+                200,
+                data=walking_route
+            )
+            
+            return success and success2
+        return success
+
+    def test_geocode_address(self):
+        """Test address geocoding"""
+        # Test geocoding Amsterdam Central Station
+        success, response = self.run_test(
+            "Geocode Address",
+            "POST",
+            "geocode/address?address=Amsterdam Central Station&language=en",
+            200
+        )
+        
+        if success and response:
+            required_fields = ['status', 'address', 'latitude', 'longitude', 'formatted_address']
+            missing_fields = [field for field in required_fields if field not in response]
+            if missing_fields:
+                print(f"   ⚠️  Missing fields in geocode response: {missing_fields}")
+                return False
+            
+            print(f"   Geocoded address: {response['formatted_address']}")
+            print(f"   Coordinates: {response['latitude']}, {response['longitude']}")
+            
+            # Verify coordinates are reasonable for Amsterdam
+            lat, lng = response['latitude'], response['longitude']
+            if 52.0 <= lat <= 53.0 and 4.0 <= lng <= 5.0:
+                print(f"   ✅ Coordinates are within Amsterdam bounds")
+                return True
+            else:
+                print(f"   ⚠️  Coordinates seem outside Amsterdam: {lat}, {lng}")
+                return False
+        return success
+
+    def test_supported_languages(self):
+        """Test getting supported languages"""
+        success, response = self.run_test(
+            "Get Supported Languages",
+            "GET",
+            "languages",
+            200
+        )
+        
+        if success and response:
+            if 'languages' in response and 'status' in response:
+                languages = response['languages']
+                print(f"   Found {len(languages)} supported languages")
+                
+                # Check expected languages are present
+                expected_languages = ['en', 'nl', 'si', 'ta', 'ja', 'zh', 'es', 'fr', 'de']
+                language_codes = [lang['code'] for lang in languages]
+                
+                missing_languages = [code for code in expected_languages if code not in language_codes]
+                if missing_languages:
+                    print(f"   ⚠️  Missing expected languages: {missing_languages}")
+                else:
+                    print(f"   ✅ All expected languages are supported")
+                
+                # Check language structure
+                if len(languages) > 0:
+                    first_lang = languages[0]
+                    required_fields = ['code', 'name', 'flag']
+                    missing_fields = [field for field in required_fields if field not in first_lang]
+                    if missing_fields:
+                        print(f"   ⚠️  Missing fields in language: {missing_fields}")
+                    else:
+                        print(f"   ✅ Language structure is correct")
+                        print(f"   Sample language: {first_lang['flag']} {first_lang['name']} ({first_lang['code']})")
+                
+                return True
+            else:
+                print(f"   ❌ Expected 'languages' and 'status' in response, got: {list(response.keys())}")
+                return False
+        return success
+
+    def test_multilingual_navigation(self):
+        """Test multilingual navigation instructions"""
+        # Test route calculation in different languages
+        route_data = {
+            "origin_lat": 52.3791,
+            "origin_lng": 4.9003,
+            "destination_lat": 52.3738,
+            "destination_lng": 4.8909,
+            "travel_mode": "driving",
+            "language": "nl"  # Dutch
+        }
+        
+        success, response = self.run_test(
+            "Multilingual Route - Dutch",
+            "POST",
+            "directions/calculate",
+            200,
+            data=route_data
+        )
+        
+        if success and response:
+            steps = response.get('steps', [])
+            if len(steps) > 0:
+                instruction = steps[0]['instruction']
+                print(f"   Dutch instruction: {instruction[:50]}...")
+                
+                # Test another language
+                route_data['language'] = 'fr'  # French
+                success2, response2 = self.run_test(
+                    "Multilingual Route - French",
+                    "POST",
+                    "directions/calculate",
+                    200,
+                    data=route_data
+                )
+                
+                if success2 and response2:
+                    steps2 = response2.get('steps', [])
+                    if len(steps2) > 0:
+                        instruction2 = steps2[0]['instruction']
+                        print(f"   French instruction: {instruction2[:50]}...")
+                        
+                        # Verify instructions are different (different languages)
+                        if instruction != instruction2:
+                            print(f"   ✅ Instructions are properly localized")
+                            return True
+                        else:
+                            print(f"   ⚠️  Instructions appear to be the same across languages")
+                            return False
+                
+                return success2
+        return success
+
+    def test_error_handling(self):
+        """Test error handling for invalid requests"""
+        print(f"\n🔍 Testing Error Handling...")
+        
+        # Test invalid search query
+        success1, response1 = self.run_test(
+            "Invalid Search - Empty Query",
+            "POST",
+            "search/places",
+            422,  # Validation error
+            data={"query": "", "language": "en"}
+        )
+        
+        # Test invalid route coordinates
+        success2, response2 = self.run_test(
+            "Invalid Route - Bad Coordinates",
+            "POST",
+            "directions/calculate",
+            422,  # Validation error
+            data={
+                "origin_lat": 200,  # Invalid latitude
+                "origin_lng": 4.9003,
+                "destination_lat": 52.3738,
+                "destination_lng": 4.8909,
+                "travel_mode": "driving",
+                "language": "en"
+            }
+        )
+        
+        # Test invalid travel mode
+        success3, response3 = self.run_test(
+            "Invalid Route - Bad Travel Mode",
+            "POST",
+            "directions/calculate",
+            422,  # Validation error
+            data={
+                "origin_lat": 52.3791,
+                "origin_lng": 4.9003,
+                "destination_lat": 52.3738,
+                "destination_lng": 4.8909,
+                "travel_mode": "flying",  # Invalid mode
+                "language": "en"
+            }
+        )
+        
+        # Test invalid tour route ID
+        success4, response4 = self.run_test(
             "Invalid Route ID",
             "GET",
             "tour-routes/invalid-id/points",
@@ -243,14 +521,14 @@ class GPSTunnelAPITester:
         )
         
         # Test invalid session ID
-        success2, response2 = self.run_test(
+        success5, response5 = self.run_test(
             "Invalid Session ID",
             "GET",
             "tour-sessions/invalid-id/current-content",
             404
         )
         
-        return success and success2
+        return success1 and success2 and success3 and success4 and success5
 
 def main():
     print("🚢 GPS TUNNEL - Dining Boat Tour Navigation API Tests")
