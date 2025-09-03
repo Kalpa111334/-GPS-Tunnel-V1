@@ -58,7 +58,7 @@
     "start": "craco start",
     "build": "craco build",
     "test": "craco test",
-    "vercel-build": "react-scripts build"
+    "vercel-build": "GENERATE_SOURCEMAP=false react-scripts build"
   },
   "browserslist": {
     "production": [
@@ -88,11 +88,11 @@
   "resolutions": {
     "ajv": "^6.12.6",
     "ajv-keywords": "^3.5.2",
-    "schema-utils": "^3.3.0"
+    "schema-utils": "^2.8.0"
   },
   "overrides": {
     "ajv": "^6.12.6",
     "ajv-keywords": "^3.5.2",
-    "schema-utils": "^3.3.0"
+    "schema-utils": "^2.8.0"
   }
 }
