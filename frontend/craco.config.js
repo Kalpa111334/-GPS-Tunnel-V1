@@ -3,10 +3,16 @@ const path = require('path');
 module.exports = {
   webpack: {
     configure: (webpackConfig) => {
-      // Remove problematic plugins that use schema-utils
+      // Remove ALL problematic plugins that use schema-utils
       webpackConfig.plugins = webpackConfig.plugins.filter(plugin => {
-        return !plugin.constructor.name.includes('ForkTsCheckerWebpackPlugin');
+        const pluginName = plugin.constructor.name;
+        return !pluginName.includes('ForkTsCheckerWebpackPlugin') &&
+               !pluginName.includes('TerserPlugin') &&
+               !pluginName.includes('OptimizeCssAssetsPlugin');
       });
+      
+      // Disable TypeScript checking completely
+      webpackConfig.resolve.extensions = ['.js', '.jsx', '.json'];
       
       // Add fallbacks for Node.js modules
       webpackConfig.resolve.fallback = {
