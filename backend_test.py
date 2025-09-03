@@ -531,8 +531,8 @@ class GPSTunnelAPITester:
         return success1 and success2 and success3 and success4 and success5
 
 def main():
-    print("🚢 GPS TUNNEL - Dining Boat Tour Navigation API Tests")
-    print("=" * 60)
+    print("🚢 GPS TUNNEL - Enhanced Navigation & Dining Boat Tour API Tests")
+    print("=" * 70)
     
     # Setup
     tester = GPSTunnelAPITester()
@@ -543,28 +543,49 @@ def main():
     # Basic connectivity
     test_results.append(tester.test_root_endpoint())
     
-    # Core functionality tests
+    # NEW NAVIGATION API TESTS
+    print(f"\n🧭 TESTING NEW NAVIGATION FEATURES")
+    print("-" * 40)
+    test_results.append(tester.test_search_places())
+    test_results.append(tester.test_calculate_route())
+    test_results.append(tester.test_geocode_address())
+    test_results.append(tester.test_supported_languages())
+    test_results.append(tester.test_multilingual_navigation())
+    
+    # ORIGINAL TOUR API TESTS
+    print(f"\n🚢 TESTING ORIGINAL DINING TOUR FEATURES")
+    print("-" * 40)
     test_results.append(tester.test_get_tour_routes())
     test_results.append(tester.test_get_tour_route_points())
     test_results.append(tester.test_create_tour_session())
     test_results.append(tester.test_update_session_location())
     test_results.append(tester.test_get_current_content())
     
-    # Error handling tests
-    test_results.append(tester.test_invalid_endpoints())
+    # ERROR HANDLING TESTS
+    print(f"\n⚠️  TESTING ERROR HANDLING")
+    print("-" * 40)
+    test_results.append(tester.test_error_handling())
     
     # Print final results
-    print(f"\n" + "=" * 60)
+    print(f"\n" + "=" * 70)
     print(f"📊 FINAL RESULTS")
     print(f"Tests passed: {tester.tests_passed}/{tester.tests_run}")
     print(f"Success rate: {(tester.tests_passed/tester.tests_run)*100:.1f}%")
     
     if tester.tests_passed == tester.tests_run:
         print("🎉 All tests passed! Backend API is working correctly.")
+        print("✅ Both navigation and dining tour features are functional.")
         return 0
     else:
         failed_tests = tester.tests_run - tester.tests_passed
         print(f"⚠️  {failed_tests} test(s) failed. Please check the issues above.")
+        
+        # Provide specific guidance based on failures
+        if tester.tests_passed < tester.tests_run / 2:
+            print("🚨 Major issues detected. Backend may not be running or configured properly.")
+        else:
+            print("⚠️  Some features are not working. Check individual test failures above.")
+        
         return 1
 
 if __name__ == "__main__":
