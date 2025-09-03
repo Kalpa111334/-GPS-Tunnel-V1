@@ -56,10 +56,10 @@
     "zod": "^3.24.4"
   },
   "scripts": {
-    "start": "craco start",
-    "build": "CI=false craco build",
-    "test": "craco test",
-    "vercel-build": "CI=false GENERATE_SOURCEMAP=false craco build"
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "vercel-build": "react-scripts build"
   },
   "browserslist": {
     "production": [
@@ -74,7 +74,6 @@
     ]
   },
   "devDependencies": {
-    "@craco/craco": "^7.1.0",
     "@eslint/js": "9.23.0",
     "autoprefixer": "^10.4.20",
     "eslint": "9.23.0",
