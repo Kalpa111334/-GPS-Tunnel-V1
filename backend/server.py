@@ -273,6 +273,241 @@ async def get_current_tour_content(session_id: str, language: str = "en"):
     
     return {"message": "Tour completed", "progress": len(sorted_points), "total_points": len(sorted_points)}
 
+# Google Maps Directions API integration
+import googlemaps
+
+# Initialize Google Maps client
+GOOGLE_MAPS_API_KEY = "AIzaSyARSoKujCNX2odk8wachQyz0DIjBCqJNd4"
+gmaps_client = googlemaps.Client(key=GOOGLE_MAPS_API_KEY)
+
+class PlaceSearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=200)
+    latitude: Optional[float] = Field(None, ge=-90, le=90)
+    longitude: Optional[float] = Field(None, ge=-180, le=180)
+    radius: Optional[int] = Field(5000, ge=100, le=50000)
+    language: Optional[str] = Field("en")
+
+class RouteRequest(BaseModel):
+    origin_lat: float = Field(..., ge=-90, le=90)
+    origin_lng: float = Field(..., ge=-180, le=180)
+    destination_lat: float = Field(..., ge=-90, le=90)
+    destination_lng: float = Field(..., ge=-180, le=180)
+    travel_mode: str = Field("driving", regex="^(driving|walking|bicycling|transit)$")
+    language: str = Field("en")
+    avoid: Optional[List[str]] = Field(None)
+
+class RouteStep(BaseModel):
+    instruction: str
+    distance_text: str
+    distance_value: int
+    duration_text: str
+    duration_value: int
+    start_lat: float
+    start_lng: float
+    end_lat: float
+    end_lng: float
+    maneuver: Optional[str] = None
+    polyline: str
+
+class RouteResponse(BaseModel):
+    total_distance_text: str
+    total_distance_value: int
+    total_duration_text: str
+    total_duration_value: int
+    start_address: str
+    end_address: str
+    overview_polyline: str
+    steps: List[RouteStep]
+    bounds: Dict[str, Any]
+
+class SearchResult(BaseModel):
+    place_id: str
+    name: str
+    formatted_address: str
+    latitude: float
+    longitude: float
+    types: List[str] = []
+    rating: Optional[float] = None
+
+# Enhanced API Routes for Destination Search and Navigation
+@api_router.post("/search/places")
+async def search_places(search_request: PlaceSearchRequest):
+    """Search for places/destinations using text query"""
+    try:
+        search_params = {
+            'query': search_request.query,
+            'language': search_request.language
+        }
+        
+        if search_request.latitude and search_request.longitude:
+            search_params['location'] = (search_request.latitude, search_request.longitude)
+            search_params['radius'] = search_request.radius
+        
+        logger.info(f"Searching places for: {search_request.query}")
+        results = gmaps_client.places(**search_params)
+        
+        search_results = []
+        for place in results.get('results', []):
+            try:
+                search_result = SearchResult(
+                    place_id=place['place_id'],
+                    name=place['name'],
+                    formatted_address=place.get('formatted_address', ''),
+                    latitude=place['geometry']['location']['lat'],
+                    longitude=place['geometry']['location']['lng'],
+                    types=place.get('types', []),
+                    rating=place.get('rating')
+                )
+                search_results.append(search_result)
+            except KeyError:
+                continue
+        
+        return {
+            "status": "success",
+            "results": search_results,
+            "total": len(search_results)
+        }
+        
+    except googlemaps.exceptions.ApiError as e:
+        logger.error(f"Google Maps API error: {e}")
+        raise HTTPException(status_code=400, detail=f"Search failed: {str(e)}")
+    except Exception as e:
+        logger.error(f"Search error: {e}")
+        raise HTTPException(status_code=500, detail="Search service unavailable")
+
+@api_router.post("/directions/calculate", response_model=RouteResponse)
+async def calculate_route(route_request: RouteRequest):
+    """Calculate route with turn-by-turn directions"""
+    try:
+        origin = (route_request.origin_lat, route_request.origin_lng)
+        destination = (route_request.destination_lat, route_request.destination_lng)
+        
+        directions_params = {
+            'origin': origin,
+            'destination': destination,
+            'mode': route_request.travel_mode,
+            'language': route_request.language,
+            'alternatives': True
+        }
+        
+        if route_request.avoid:
+            directions_params['avoid'] = '|'.join(route_request.avoid)
+        
+        logger.info(f"Calculating route from {origin} to {destination}")
+        directions_result = gmaps_client.directions(**directions_params)
+        
+        if not directions_result:
+            raise HTTPException(status_code=404, detail="No route found")
+        
+        # Process the primary route
+        route = directions_result[0]
+        leg = route['legs'][0]
+        
+        # Process turn-by-turn steps
+        steps = []
+        for step in leg['steps']:
+            route_step = RouteStep(
+                instruction=step['html_instructions'],
+                distance_text=step['distance']['text'],
+                distance_value=step['distance']['value'],
+                duration_text=step['duration']['text'],
+                duration_value=step['duration']['value'],
+                start_lat=step['start_location']['lat'],
+                start_lng=step['start_location']['lng'],
+                end_lat=step['end_location']['lat'],
+                end_lng=step['end_location']['lng'],
+                maneuver=step.get('maneuver'),
+                polyline=step['polyline']['points']
+            )
+            steps.append(route_step)
+        
+        # Extract route bounds
+        bounds = route['bounds']
+        
+        route_response = RouteResponse(
+            total_distance_text=leg['distance']['text'],
+            total_distance_value=leg['distance']['value'],
+            total_duration_text=leg['duration']['text'],
+            total_duration_value=leg['duration']['value'],
+            start_address=leg['start_address'],
+            end_address=leg['end_address'],
+            overview_polyline=route['overview_polyline']['points'],
+            steps=steps,
+            bounds={
+                'northeast': {
+                    'lat': bounds['northeast']['lat'],
+                    'lng': bounds['northeast']['lng']
+                },
+                'southwest': {
+                    'lat': bounds['southwest']['lat'],
+                    'lng': bounds['southwest']['lng']
+                }
+            }
+        )
+        
+        return route_response
+        
+    except googlemaps.exceptions.ApiError as e:
+        logger.error(f"Google Directions API error: {e}")
+        raise HTTPException(status_code=400, detail=f"Route calculation failed: {str(e)}")
+    except Exception as e:
+        logger.error(f"Route calculation error: {e}")
+        raise HTTPException(status_code=500, detail="Navigation service unavailable")
+
+@api_router.post("/geocode/address")
+async def geocode_address(address: str, language: str = "en"):
+    """Convert address to coordinates"""
+    try:
+        logger.info(f"Geocoding address: {address}")
+        geocode_result = gmaps_client.geocode(address=address, language=language)
+        
+        if geocode_result:
+            location = geocode_result[0]['geometry']['location']
+            return {
+                "status": "success",
+                "address": address,
+                "latitude": location['lat'],
+                "longitude": location['lng'],
+                "formatted_address": geocode_result[0]['formatted_address']
+            }
+        else:
+            raise HTTPException(status_code=404, detail="Address not found")
+            
+    except googlemaps.exceptions.ApiError as e:
+        logger.error(f"Geocoding API error: {e}")
+        raise HTTPException(status_code=400, detail=f"Geocoding failed: {str(e)}")
+    except Exception as e:
+        logger.error(f"Geocoding error: {e}")
+        raise HTTPException(status_code=500, detail="Geocoding service unavailable")
+
+@api_router.get("/languages")
+async def get_supported_languages():
+    """Get supported language codes for navigation"""
+    supported_languages = [
+        {"code": "en", "name": "English", "flag": "🇬🇧"},
+        {"code": "nl", "name": "Nederlands", "flag": "🇳🇱"},
+        {"code": "si", "name": "සිංහල", "flag": "🇱🇰"},
+        {"code": "ta", "name": "தமிழ்", "flag": "🇱🇰"},
+        {"code": "ja", "name": "日本語", "flag": "🇯🇵"},
+        {"code": "zh", "name": "中文", "flag": "🇨🇳"},
+        {"code": "es", "name": "Español", "flag": "🇪🇸"},
+        {"code": "fr", "name": "Français", "flag": "🇫🇷"},
+        {"code": "de", "name": "Deutsch", "flag": "🇩🇪"},
+        {"code": "it", "name": "Italiano", "flag": "🇮🇹"},
+        {"code": "pt", "name": "Português", "flag": "🇵🇹"},
+        {"code": "ru", "name": "Русский", "flag": "🇷🇺"},
+        {"code": "ar", "name": "العربية", "flag": "🇸🇦"},
+        {"code": "hi", "name": "हिन्दी", "flag": "🇮🇳"},
+        {"code": "th", "name": "ไทย", "flag": "🇹🇭"},
+        {"code": "ko", "name": "한국어", "flag": "🇰🇷"}
+    ]
+    
+    return {
+        "status": "success",
+        "languages": supported_languages,
+        "total": len(supported_languages)
+    }
+
 # Initialize app
 @app.on_event("startup")
 async def startup_event():
